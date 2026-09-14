@@ -56,9 +56,13 @@ restored with the same bytes as the corrected archives, with updated
 `SHA256SUMS` files. Aqua and other package managers need these standard names.
 Lockfiles that pin the old archive hashes need updated checksums. The correction
 records retain the hashes of the incomplete archives for reference.
+After the standard downloads and Homebrew URLs were verified, the temporary
+`-licenses.tar.gz` archives and `SHA256SUMS-licenses` files were removed. The
+corrected archive hashes in the records apply to the standard download names.
 
 The completed repair workflow was removed. Its run history and attestations
 remain available. The repair scripts remain for reference and recovery.
-The `restore-names` command verifies local and published corrected archive
-hashes before it restores the standard names. It refuses to replace an asset
-with different bytes. Do not run `retire` against the restored downloads.
+The retained `restore-names` command checks local and published corrected archive
+hashes and refuses to replace an asset with different bytes. It depends on the
+temporary correction assets and cannot be rerun after their removal. Do not run
+`retire` against the restored downloads.
