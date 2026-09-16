@@ -92,15 +92,13 @@ const WELCOME_FLASH: &str =
 /// clears it (see [`App::expire_flash`]).
 const FLASH_TTL: std::time::Duration = std::time::Duration::from_secs(8);
 
-/// Flux CD resource kinds whose spec has a `suspend: bool` field — every kind
-/// with a corresponding `flux suspend/resume` subcommand: kustomize- and
-/// helm-controller reconcilers, source-controller fetchers, image-automation
-/// controllers, and the notification-controller kinds that support it.
+/// Flux CD resource kinds that support suspend and resume through `spec.suspend`.
 const FLUX_SUSPENDABLE_KINDS: &[&str] = &[
     "kustomizations",
     "helmreleases",
     "gitrepositories",
     "helmrepositories",
+    "helmcharts",
     "ocirepositories",
     "buckets",
     "imagerepositories",
