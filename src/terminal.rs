@@ -1,4 +1,5 @@
-use std::io;
+use std::io::{self, Read, Write};
+use std::process::{Command, Stdio};
 
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{
@@ -23,9 +24,7 @@ pub fn suspend_and_run(
     }
     let _ = disable_raw_mode();
     let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen, crossterm::cursor::Show);
-    let result = std::process::Command::new(&argv[0])
-        .args(&argv[1..])
-        .status();
+    let result = run_command(argv);
     // Set the modes directly. ratatui::init would install another panic hook.
     let _ = enable_raw_mode();
     let _ = crossterm::execute!(io::stdout(), EnterAlternateScreen);
@@ -33,7 +32,47 @@ pub fn suspend_and_run(
         let _ = crossterm::execute!(io::stdout(), EnableMouseCapture);
     }
     let _ = terminal.clear();
-    result.map(|_| ())
+    result
+}
+
+const ERROR_LIMIT: usize = 16 * 1024;
+
+fn run_command(argv: &[String]) -> io::Result<()> {
+    let mut child = Command::new(&argv[0])
+        .args(&argv[1..])
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stderr = child.stderr.take().expect("piped stderr");
+    let reader = std::thread::spawn(move || {
+        let mut tail = Vec::new();
+        let mut buffer = [0; 4096];
+        loop {
+            match stderr.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let _ = io::stderr().write_all(&buffer[..n]);
+                    tail.extend_from_slice(&buffer[..n]);
+                    if tail.len() > ERROR_LIMIT {
+                        tail.drain(..tail.len() - ERROR_LIMIT);
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+        tail
+    });
+    let status = child.wait();
+    let stderr = reader.join().unwrap_or_default();
+    let status = status?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "Command failed ({status}).\n{}",
+            String::from_utf8_lossy(&stderr).trim()
+        )))
+    }
 }
 
 #[cfg(unix)]

@@ -1010,16 +1010,9 @@ fn dispatch(
 /// for it).
 fn take_suspend(terminal: &mut ratatui::DefaultTerminal, app: &mut App, captured: bool) {
     if let Some(app::Suspend::Shell(argv)) = app.pending.take() {
-        match terminal::suspend_and_run(terminal, &argv, captured) {
-            Ok(()) => {
-                app.flash = format!("ran: {}", argv.join(" "));
-                app.flash_err = false;
-            }
-            Err(error) => {
-                app.flash = format!("cannot run command: {error}");
-                app.flash_err = true;
-            }
-        }
+        let target = app.shell_target.take();
+        let result = terminal::suspend_and_run(terminal, &argv, captured);
+        app.handle_command_result(target, result);
         app.after_suspend();
         terminal_title::set(app.terminal_title().as_deref());
     }

@@ -146,6 +146,12 @@ impl App {
             } => {
                 self.do_node_debug(node, image, namespace, profile);
             }
+            ConfirmAction::Debug {
+                ns,
+                pod,
+                target,
+                image,
+            } => self.do_debug(ns, pod, target, image),
             ConfirmAction::CleanupDebuggers => {
                 self.do_cleanup_debuggers();
             }
@@ -341,7 +347,7 @@ impl App {
                         if input.is_empty() {
                             self.flash_warn("no debug image given");
                         } else {
-                            self.do_debug(ns, pod, target, input);
+                            self.confirm_debug(ns, pod, target, input);
                         }
                     }
                     // The transfer prompts chain: source path first, then the

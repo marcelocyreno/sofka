@@ -754,6 +754,28 @@ impl App {
         if self.deny_readonly() {
             return;
         }
+        let container = container.or_else(|| {
+            let obj = self.store.get(&format!("{ns}/{pod}"))?;
+            let containers = obj.data.pointer("/spec/containers")?.as_array()?;
+            let default = obj
+                .metadata
+                .annotations
+                .as_ref()
+                .and_then(|a| a.get("kubectl.kubernetes.io/default-container"));
+            default
+                .filter(|name| {
+                    containers
+                        .iter()
+                        .any(|c| c["name"].as_str() == Some(name.as_str()))
+                })
+                .cloned()
+                .or_else(|| containers.first()?.get("name")?.as_str().map(str::to_owned))
+        });
+        self.shell_target = Some(ShellTarget {
+            ns: ns.clone(),
+            pod: pod.clone(),
+            container: container.clone(),
+        });
         self.note_action("shell", format!("{pod} in {ns}"));
         let mut argv = self.kubectl_base();
         argv.extend(["exec".into(), "-it".into(), "-n".into(), ns, pod]);
@@ -788,8 +810,18 @@ impl App {
         };
         let name = obj.metadata.name.clone().unwrap_or_default();
         let ns = obj.metadata.namespace.clone().unwrap_or_default();
-        // A debug container is a mutation of the pod — let guardrails gate it,
-        // with no default confirmation (like shell).
+        self.request_debug_target(ns, name, target);
+    }
+
+    pub(super) fn request_debug_target(
+        &mut self,
+        ns: String,
+        name: String,
+        target: Option<String>,
+    ) {
+        if self.deny_readonly() {
+            return;
+        }
         let targets = [(name.clone(), ns.clone())];
         if self
             .guard("debug", "pods", &targets, ConfirmLevel::None)
@@ -810,6 +842,36 @@ impl App {
         self.mode = Mode::Prompt;
     }
 
+    pub(super) fn confirm_debug(
+        &mut self,
+        ns: String,
+        pod: String,
+        target: Option<String>,
+        image: String,
+    ) {
+        if self.deny_readonly() {
+            self.retain_recovery_error();
+            return;
+        }
+        let targets = [(pod.clone(), ns.clone())];
+        let Some(level) = self.guard("debug", "pods", &targets, ConfirmLevel::None) else {
+            self.retain_recovery_error();
+            return;
+        };
+        let label = format!("Start debug container in {ns}/{pod} with image {image}?");
+        self.begin_guarded(
+            ConfirmAction::Debug {
+                ns,
+                pod: pod.clone(),
+                target,
+                image,
+            },
+            label,
+            level,
+            pod,
+        );
+    }
+
     /// Launch `kubectl debug` for the ephemeral container: suspends the TUI and
     /// shells out interactively, exactly like exec/attach. The ephemeral
     /// container persists on the pod (Kubernetes can't remove it) until the pod
@@ -821,6 +883,7 @@ impl App {
         target: Option<String>,
         image: String,
     ) {
+        self.command_failure = None;
         let tgt = target
             .as_deref()
             .map(|c| format!(" --target {c}"))

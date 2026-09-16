@@ -32959,3 +32959,142 @@ async fn native_describe_key_preserves_secret_token_exception() {
         app.handle_key(press(KeyCode::Esc)).unwrap();
     }
 }
+
+fn complete_failed_shell(app: &mut App, error: &str) {
+    assert!(matches!(app.pending.take(), Some(Suspend::Shell(_))));
+    let target = app.shell_target.take();
+    app.handle_command_result(target, Err(std::io::Error::other(error.to_owned())));
+    app.after_suspend();
+}
+
+const MISSING_SHELL: &str =
+    "OCI runtime exec failed: exec: \"sh\": executable file not found in $PATH";
+
+#[tokio::test]
+async fn missing_shell_keeps_error_and_offers_debug_for_original_container() {
+    let (mut app, _rx) = app_with_pod();
+    apply(
+        &mut app,
+        json!({"apiVersion":"v1", "kind":"Pod",
+        "metadata":{"name":"a", "namespace":"default", "annotations":{
+            "kubectl.kubernetes.io/default-container":"worker"}},
+        "spec":{"containers":[{"name":"web"},{"name":"worker"}]}}),
+    );
+    app.handle_key(press(KeyCode::Char('s'))).unwrap();
+    let Some(Suspend::Shell(argv)) = &app.pending else {
+        panic!("no shell");
+    };
+    assert!(argv.windows(2).any(|v| v == ["-c", "worker"]));
+    complete_failed_shell(&mut app, MISSING_SHELL);
+    app.expire_flash();
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(110, 35)).unwrap();
+    terminal.draw(|f| crate::ui::draw(f, &mut app)).unwrap();
+    let screen = terminal
+        .backend()
+        .buffer()
+        .content
+        .chunks(110)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(screen.contains("Start debug container"), "{screen}");
+    assert!(app.command_failure_visible());
+    app.handle_key(press(KeyCode::Char('x'))).unwrap();
+    assert!(app.command_failure_visible());
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert_eq!(app.prompt_input, app.debug.image);
+    assert!(app.pending.is_none());
+    app.handle_key(press(KeyCode::Esc)).unwrap();
+    assert!(app.command_failure_visible());
+    assert!(
+        app.command_failure
+            .as_ref()
+            .unwrap()
+            .message
+            .contains(MISSING_SHELL)
+    );
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    app.handle_key(press(KeyCode::Enter)).unwrap();
+    let Some(Suspend::Shell(argv)) = app.pending.take() else {
+        panic!("no debug command");
+    };
+    assert!(argv.iter().any(|a| a == "--target=worker"));
+    assert!(argv.windows(2).any(|v| v == ["default", "a"]));
+    assert!(app.command_failure.is_none());
+}
+
+#[tokio::test]
+async fn shell_failure_recovery_retains_errors_when_readonly_or_guardrail_blocks() {
+    for readonly in [true, false] {
+        let (mut app, _rx) = app_with_pod();
+        app.handle_key(press(KeyCode::Char('s'))).unwrap();
+        complete_failed_shell(&mut app, MISSING_SHELL);
+        if readonly {
+            app.readonly = true;
+        } else {
+            app.guardrails = vec![crate::config::Guardrail {
+                actions: vec!["debug".into()],
+                deny: true,
+                ..Default::default()
+            }];
+        }
+        app.handle_key(press(KeyCode::Char('d'))).unwrap();
+        assert!(app.command_failure_visible());
+        let message = &app.command_failure.as_ref().unwrap().message;
+        assert!(message.contains(MISSING_SHELL));
+        assert!(
+            message.contains(if readonly { "read-only" } else { "guardrail" }),
+            "{message}"
+        );
+        assert!(app.pending.is_none());
+        app.handle_key(press(KeyCode::Esc)).unwrap();
+        assert!(app.command_failure.is_none());
+    }
+}
+
+#[tokio::test]
+async fn shell_debug_recovery_obeys_typed_confirmation() {
+    let (mut app, _rx) = app_with_pod();
+    app.guardrails = vec![crate::config::Guardrail {
+        actions: vec!["debug".into()],
+        confirmation: Some("type-resource-name".into()),
+        ..Default::default()
+    }];
+    app.handle_key(press(KeyCode::Char('s'))).unwrap();
+    complete_failed_shell(&mut app, MISSING_SHELL);
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    app.handle_key(press(KeyCode::Enter)).unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert!(app.pending.is_none());
+    app.handle_key(press(KeyCode::Char('a'))).unwrap();
+    app.handle_key(press(KeyCode::Enter)).unwrap();
+    assert!(app.pending.is_some());
+}
+
+#[tokio::test]
+async fn other_shell_failures_do_not_offer_debug_and_success_has_no_dialog() {
+    for error in [
+        "Error from server (Forbidden): pods/exec is forbidden",
+        "connection refused",
+        "exit status 127",
+        "sh: ls: not found",
+    ] {
+        let (mut app, _rx) = app_with_pod();
+        app.handle_key(press(KeyCode::Char('s'))).unwrap();
+        complete_failed_shell(&mut app, error);
+        assert!(app.command_failure_visible());
+        assert!(app.command_failure.as_ref().unwrap().target.is_none());
+        app.handle_key(press(KeyCode::Char('d'))).unwrap();
+        assert!(app.pending.is_none());
+        app.handle_key(press(KeyCode::Enter)).unwrap();
+        assert!(app.command_failure.is_none());
+    }
+    let (mut app, _rx) = app_with_pod();
+    app.handle_key(press(KeyCode::Char('s'))).unwrap();
+    app.pending.take();
+    let target = app.shell_target.take();
+    app.handle_command_result(target, Ok(()));
+    assert!(!app.flash_err);
+    assert!(app.command_failure.is_none());
+}

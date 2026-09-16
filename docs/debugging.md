@@ -118,6 +118,14 @@ For history that outlives the pod, use [VictoriaLogs](providers.md#log-provider-
 
 ## Debug containers and pods
 
+When a pod shell fails, sofka keeps the exit status and the last 16 KiB of
+standard error in a dialog until you dismiss it. If the runtime reports a
+missing `sh`, press `d` to open the debug image prompt for the same target.
+The image is shown before creation. No debug container is created until you
+accept the prompt and any required guardrail confirmation. Canceling returns
+to the original error. Read-only mode and the `debug` guardrail still apply.
+Permission errors and connection failures do not trigger this recovery offer.
+
 `:debug` on a **pod** attaches a temporary ephemeral debug container with
 `kubectl debug`. sofka prompts for the image (prefilled from `[debug]`). An empty
 `command` starts an interactive shell (bash if the image has it, else sh), like
