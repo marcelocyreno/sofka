@@ -1,5 +1,5 @@
-use std::io::{self, Read, Write};
-use std::process::{Command, Stdio};
+use std::io::{self, Write};
+use std::process::Stdio;
 
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{
@@ -38,39 +38,65 @@ pub fn suspend_and_run(
 const ERROR_LIMIT: usize = 16 * 1024;
 
 fn run_command(argv: &[String]) -> io::Result<()> {
-    let mut child = Command::new(&argv[0])
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?
+                    .block_on(run_command_async(argv))
+            })
+            .join()
+            .map_err(|_| io::Error::other("Command runner failed."))?
+    })
+}
+
+async fn run_command_async(argv: &[String]) -> io::Result<()> {
+    use tokio::io::AsyncReadExt;
+    let mut child = tokio::process::Command::new(&argv[0])
         .args(&argv[1..])
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
         .stderr(Stdio::piped())
         .spawn()?;
     let mut stderr = child.stderr.take().expect("piped stderr");
-    let reader = std::thread::spawn(move || {
-        let mut tail = Vec::new();
-        let mut buffer = [0; 4096];
-        loop {
-            match stderr.read(&mut buffer) {
-                Ok(0) => break,
-                Ok(n) => {
-                    let _ = io::stderr().write_all(&buffer[..n]);
-                    tail.extend_from_slice(&buffer[..n]);
-                    if tail.len() > ERROR_LIMIT {
-                        tail.drain(..tail.len() - ERROR_LIMIT);
-                    }
-                }
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Err(_) => break,
+    let mut tail = Vec::new();
+    let mut buffer = [0; 4096];
+    let mut status = None;
+    let mut closed = false;
+    let mut deadline = tokio::time::Instant::now();
+    loop {
+        tokio::select! {
+            result = child.wait(), if status.is_none() => {
+                status = Some(result?);
+                // A descendant can retain stderr after the command exits.
+                deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(100);
             }
+            result = stderr.read(&mut buffer), if !closed => {
+                match result {
+                    Ok(0) => closed = true,
+                    Ok(n) => {
+                        let _ = io::stderr().write_all(&buffer[..n]);
+                        tail.extend_from_slice(&buffer[..n]);
+                        if tail.len() > ERROR_LIMIT { tail.drain(..tail.len() - ERROR_LIMIT); }
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
+                    Err(_) => closed = true,
+                }
+            }
+            _ = tokio::time::sleep_until(deadline), if status.is_some() => break,
         }
-        tail
-    });
-    let status = child.wait();
-    let stderr = reader.join().unwrap_or_default();
-    let status = status?;
+        if status.is_some() && closed {
+            break;
+        }
+    }
+    let status = status.expect("command has exited");
     if status.success() {
         Ok(())
     } else {
         Err(io::Error::other(format!(
             "Command failed ({status}).\n{}",
-            String::from_utf8_lossy(&stderr).trim()
+            String::from_utf8_lossy(&tail).trim()
         )))
     }
 }

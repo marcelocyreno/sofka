@@ -883,7 +883,6 @@ impl App {
         target: Option<String>,
         image: String,
     ) {
-        self.command_failure = None;
         let tgt = target
             .as_deref()
             .map(|c| format!(" --target {c}"))

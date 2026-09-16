@@ -33021,6 +33021,16 @@ async fn missing_shell_keeps_error_and_offers_debug_for_original_container() {
     };
     assert!(argv.iter().any(|a| a == "--target=worker"));
     assert!(argv.windows(2).any(|v| v == ["default", "a"]));
+    app.handle_command_result(
+        None,
+        Err(std::io::Error::other("debug containers are forbidden")),
+    );
+    let message = &app.command_failure.as_ref().unwrap().message;
+    assert!(message.contains(MISSING_SHELL) && message.contains("debug containers are forbidden"));
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    app.handle_key(press(KeyCode::Enter)).unwrap();
+    app.pending.take();
+    app.handle_command_result(None, Ok(()));
     assert!(app.command_failure.is_none());
 }
 

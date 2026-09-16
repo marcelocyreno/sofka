@@ -9,6 +9,7 @@ pub struct ShellTarget {
 
 pub struct CommandFailure {
     pub message: String,
+    original_message: String,
     pub target: Option<ShellTarget>,
 }
 
@@ -36,7 +37,22 @@ impl App {
             Err(error) => {
                 let message = crate::ui::strip_ansi_if_present(&error.to_string()).into_owned();
                 let target = target.filter(|_| missing_shell(&message));
-                self.command_failure = Some(CommandFailure { message, target });
+                let (message, original_message, target) = match self.command_failure.take() {
+                    Some(previous) => (
+                        format!(
+                            "{}\n\nRecovery failed:\n{message}",
+                            previous.original_message
+                        ),
+                        previous.original_message,
+                        previous.target,
+                    ),
+                    None => (message.clone(), message, target),
+                };
+                self.command_failure = Some(CommandFailure {
+                    message,
+                    original_message,
+                    target,
+                });
                 self.popup_scroll = 0;
                 self.flash = "Command failed.".into();
                 self.flash_err = true;

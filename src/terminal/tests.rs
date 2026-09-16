@@ -150,7 +150,14 @@ impl Drop for Session {
 
 #[test]
 fn terminal_plugin_restores_tui_after_exit_interrupt_quit_and_spawn_error() {
-    for case in ["exit", "failure", "interrupt", "quit", "missing"] {
+    for case in [
+        "exit",
+        "failure",
+        "descendant",
+        "interrupt",
+        "quit",
+        "missing",
+    ] {
         let mut session = Session::start(case);
         for _ in 0..2 {
             session.expect("TUI_READY");
@@ -202,10 +209,20 @@ fn terminal_plugin_command() {
     }
     println!("PLUGIN_READY");
     io::stdout().flush().unwrap();
-    if matches!(case.as_str(), "exit" | "failure") {
+    if matches!(case.as_str(), "exit" | "failure" | "descendant") {
         let mut answer = String::new();
         io::stdin().read_line(&mut answer).unwrap();
         assert_eq!(answer.trim_end(), "done");
+        if case == "descendant" {
+            let _child = Command::new("sleep")
+                .arg("30")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap();
+            eprintln!("descendant still has stderr open");
+            std::process::exit(7);
+        }
         if case == "failure" {
             eprintln!("exec: \"sh\": executable file not found in $PATH");
             std::process::exit(7);
