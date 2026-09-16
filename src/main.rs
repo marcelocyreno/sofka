@@ -1009,10 +1009,14 @@ fn dispatch(
 /// its shell is requested from a message, not from the keystroke that asked
 /// for it).
 fn take_suspend(terminal: &mut ratatui::DefaultTerminal, app: &mut App, captured: bool) {
-    if let Some(app::Suspend::Shell(argv)) = app.pending.take() {
+    if let Some(command) = app.pending.take() {
+        let (argv, recovery) = match command {
+            app::Suspend::Shell(argv) => (argv, None),
+            app::Suspend::Recovery { argv, failure } => (argv, Some(failure)),
+        };
         let target = app.shell_target.take();
         let result = terminal::suspend_and_run(terminal, &argv, captured);
-        app.handle_command_result(target, result);
+        app.handle_command_result(target, result, recovery);
         app.after_suspend();
         terminal_title::set(app.terminal_title().as_deref());
     }

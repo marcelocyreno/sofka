@@ -62,35 +62,30 @@ async fn run_command_async(argv: &[String]) -> io::Result<()> {
     let mut stderr = child.stderr.take().expect("piped stderr");
     let mut tail = Vec::new();
     let mut buffer = [0; 4096];
-    let mut status = None;
     let mut closed = false;
-    let mut deadline = tokio::time::Instant::now();
-    loop {
+    let status = loop {
         tokio::select! {
-            result = child.wait(), if status.is_none() => {
-                status = Some(result?);
-                // A descendant can retain stderr after the command exits.
-                deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(100);
-            }
+            biased;
+            result = child.wait() => break result?,
             result = stderr.read(&mut buffer), if !closed => {
                 match result {
                     Ok(0) => closed = true,
-                    Ok(n) => {
-                        let _ = io::stderr().write_all(&buffer[..n]);
-                        tail.extend_from_slice(&buffer[..n]);
-                        if tail.len() > ERROR_LIMIT { tail.drain(..tail.len() - ERROR_LIMIT); }
-                    }
+                    Ok(n) => record_stderr(&mut tail, &mut io::stderr(), &buffer[..n]),
                     Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
                     Err(_) => closed = true,
                 }
             }
-            _ = tokio::time::sleep_until(deadline), if status.is_some() => break,
         }
-        if status.is_some() && closed {
-            break;
-        }
+    };
+    if !closed {
+        drain_stderr(
+            &mut stderr,
+            &mut tail,
+            &mut io::stderr(),
+            tokio::time::Instant::now() + std::time::Duration::from_millis(100),
+        )
+        .await;
     }
-    let status = status.expect("command has exited");
     if status.success() {
         Ok(())
     } else {
@@ -98,6 +93,46 @@ async fn run_command_async(argv: &[String]) -> io::Result<()> {
             "Command failed ({status}).\n{}",
             String::from_utf8_lossy(&tail).trim()
         )))
+    }
+}
+
+fn record_stderr(tail: &mut Vec<u8>, output: &mut impl Write, bytes: &[u8]) {
+    let _ = output.write_all(bytes);
+    tail.extend_from_slice(bytes);
+    if tail.len() > ERROR_LIMIT {
+        tail.drain(..tail.len() - ERROR_LIMIT);
+    }
+}
+
+async fn drain_stderr(
+    stderr: &mut (impl tokio::io::AsyncRead + Unpin),
+    tail: &mut Vec<u8>,
+    output: &mut impl Write,
+    deadline: tokio::time::Instant,
+) {
+    use tokio::io::AsyncReadExt;
+    let mut buffer = [0; 4096];
+    // Also bound descendants that keep writing after the command exits.
+    let mut remaining: usize = 1024 * 1024;
+    while remaining > 0 {
+        let capacity = remaining.min(buffer.len());
+        tokio::select! {
+            biased;
+            // Read available bytes before an expired timer. Cooperative task
+            // budgets must not make a ready pipe appear empty during this drain.
+            result = tokio::task::unconstrained(stderr.read(&mut buffer[..capacity])) => {
+                match result {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        record_stderr(tail, output, &buffer[..n]);
+                        remaining -= n;
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
+                    Err(_) => break,
+                }
+            }
+            _ = tokio::time::sleep_until(deadline) => break,
+        }
     }
 }
 

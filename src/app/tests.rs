@@ -12136,6 +12136,7 @@ async fn debug_from_container_picker_pins_target() {
         "a".into(),
         Some("app".into()),
         "busybox:latest".into(),
+        None,
     );
     let Some(Suspend::Shell(argv)) = app.pending.take() else {
         panic!("expected a debug shell");
@@ -32963,7 +32964,7 @@ async fn native_describe_key_preserves_secret_token_exception() {
 fn complete_failed_shell(app: &mut App, error: &str) {
     assert!(matches!(app.pending.take(), Some(Suspend::Shell(_))));
     let target = app.shell_target.take();
-    app.handle_command_result(target, Err(std::io::Error::other(error.to_owned())));
+    app.handle_command_result(target, Err(std::io::Error::other(error.to_owned())), None);
     app.after_suspend();
 }
 
@@ -33016,7 +33017,7 @@ async fn missing_shell_keeps_error_and_offers_debug_for_original_container() {
     );
     app.handle_key(press(KeyCode::Char('d'))).unwrap();
     app.handle_key(press(KeyCode::Enter)).unwrap();
-    let Some(Suspend::Shell(argv)) = app.pending.take() else {
+    let Some(Suspend::Recovery { argv, failure }) = app.pending.take() else {
         panic!("no debug command");
     };
     assert!(argv.iter().any(|a| a == "--target=worker"));
@@ -33024,13 +33025,14 @@ async fn missing_shell_keeps_error_and_offers_debug_for_original_container() {
     app.handle_command_result(
         None,
         Err(std::io::Error::other("debug containers are forbidden")),
+        Some(failure),
     );
     let message = &app.command_failure.as_ref().unwrap().message;
     assert!(message.contains(MISSING_SHELL) && message.contains("debug containers are forbidden"));
     app.handle_key(press(KeyCode::Char('d'))).unwrap();
     app.handle_key(press(KeyCode::Enter)).unwrap();
     app.pending.take();
-    app.handle_command_result(None, Ok(()));
+    app.handle_command_result(None, Ok(()), None);
     assert!(app.command_failure.is_none());
 }
 
@@ -33104,7 +33106,56 @@ async fn other_shell_failures_do_not_offer_debug_and_success_has_no_dialog() {
     app.handle_key(press(KeyCode::Char('s'))).unwrap();
     app.pending.take();
     let target = app.shell_target.take();
-    app.handle_command_result(target, Ok(()));
+    app.handle_command_result(target, Ok(()), None);
     assert!(!app.flash_err);
     assert!(app.command_failure.is_none());
+}
+
+#[tokio::test]
+async fn unrelated_command_failure_replaces_pending_shell_recovery() {
+    let (mut app, _rx) = app_with_pod();
+    app.handle_key(press(KeyCode::Char('s'))).unwrap();
+    complete_failed_shell(&mut app, MISSING_SHELL);
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    assert_eq!(app.mode, Mode::Prompt);
+    assert!(app.command_failure.is_some());
+
+    app.handle_command_result(
+        None,
+        Err(std::io::Error::other("unrelated command failed")),
+        None,
+    );
+    app.handle_key(press(KeyCode::Esc)).unwrap();
+    let failure = app.command_failure.as_ref().unwrap();
+    assert_eq!(failure.message, "unrelated command failed");
+    assert!(failure.target.is_none());
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    assert!(app.pending.is_none());
+    assert!(app.command_failure_visible());
+}
+
+#[tokio::test]
+async fn unrelated_missing_shell_uses_its_own_target() {
+    let (mut app, _rx) = app_with_pod();
+    app.handle_key(press(KeyCode::Char('s'))).unwrap();
+    complete_failed_shell(&mut app, MISSING_SHELL);
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    app.handle_command_result(
+        Some(ShellTarget {
+            ns: "other".into(),
+            pod: "new-pod".into(),
+            container: Some("worker".into()),
+        }),
+        Err(std::io::Error::other(MISSING_SHELL)),
+        None,
+    );
+    app.handle_key(press(KeyCode::Esc)).unwrap();
+    app.handle_key(press(KeyCode::Char('d'))).unwrap();
+    app.handle_key(press(KeyCode::Enter)).unwrap();
+    let Some(Suspend::Recovery { argv, failure }) = app.pending.take() else {
+        panic!("no recovery command");
+    };
+    assert!(argv.windows(2).any(|v| v == ["other", "new-pod"]));
+    assert!(argv.iter().any(|a| a == "--target=worker"));
+    assert_eq!(failure.target.as_ref().unwrap().pod, "new-pod");
 }

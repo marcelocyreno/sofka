@@ -308,3 +308,52 @@ async fn terminal_plugin_child() {
     ratatui::restore();
     println!("ALL_DONE");
 }
+
+#[tokio::test]
+async fn stderr_drain_keeps_ready_tail_after_deadline() {
+    let final_error = b"exec: \"sh\": executable file not found in $PATH\n";
+    let mut bytes = vec![b'x'; ERROR_LIMIT * 4];
+    bytes.extend_from_slice(final_error);
+    let mut reader = bytes.as_slice();
+    let mut tail = Vec::new();
+    let mut output = Vec::new();
+    drain_stderr(
+        &mut reader,
+        &mut tail,
+        &mut output,
+        tokio::time::Instant::now(),
+    )
+    .await;
+    assert_eq!(output, bytes);
+    assert_eq!(tail.len(), ERROR_LIMIT);
+    assert!(tail.ends_with(final_error));
+}
+
+#[tokio::test]
+async fn stderr_drain_stops_for_idle_or_continuously_writing_descendants() {
+    let (mut reader, _held_open) = tokio::io::duplex(4096);
+    let mut tail = Vec::new();
+    tokio::time::timeout(
+        Duration::from_secs(1),
+        drain_stderr(
+            &mut reader,
+            &mut tail,
+            &mut io::sink(),
+            tokio::time::Instant::now(),
+        ),
+    )
+    .await
+    .unwrap();
+    assert!(tail.is_empty());
+    let mut reader = tokio::io::repeat(b'x');
+    let mut output = Vec::new();
+    drain_stderr(
+        &mut reader,
+        &mut tail,
+        &mut output,
+        tokio::time::Instant::now(),
+    )
+    .await;
+    assert_eq!(output.len(), 1024 * 1024);
+    assert_eq!(tail.len(), ERROR_LIMIT);
+}

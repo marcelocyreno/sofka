@@ -119,7 +119,10 @@ For history that outlives the pod, use [VictoriaLogs](providers.md#log-provider-
 ## Debug containers and pods
 
 When a pod shell fails, sofka keeps the exit status and the last 16 KiB of
-standard error in a dialog until you dismiss it. If the runtime reports a
+captured standard error in a dialog until you dismiss it. After the command
+exits, sofka reads available error output before applying a 100 ms deadline to
+an idle pipe. It reads at most 1 MiB after exit so a descendant that keeps
+writing cannot block the interface. If the runtime reports a
 missing `sh`, press `d` to open the debug image prompt for the same target.
 The image is shown before creation. No debug container is created until you
 accept the prompt and any required guardrail confirmation. Canceling returns

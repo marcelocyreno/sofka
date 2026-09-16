@@ -810,7 +810,7 @@ impl App {
         };
         let name = obj.metadata.name.clone().unwrap_or_default();
         let ns = obj.metadata.namespace.clone().unwrap_or_default();
-        self.request_debug_target(ns, name, target);
+        self.request_debug_target(ns, name, target, None);
     }
 
     pub(super) fn request_debug_target(
@@ -818,6 +818,7 @@ impl App {
         ns: String,
         name: String,
         target: Option<String>,
+        recovery: Option<Box<CommandFailure>>,
     ) {
         if self.deny_readonly() {
             return;
@@ -838,6 +839,7 @@ impl App {
             ns,
             pod: name,
             target,
+            recovery,
         });
         self.mode = Mode::Prompt;
     }
@@ -848,14 +850,19 @@ impl App {
         pod: String,
         target: Option<String>,
         image: String,
+        recovery: Option<Box<CommandFailure>>,
     ) {
         if self.deny_readonly() {
-            self.retain_recovery_error();
+            if recovery.is_some() {
+                self.retain_recovery_error();
+            }
             return;
         }
         let targets = [(pod.clone(), ns.clone())];
         let Some(level) = self.guard("debug", "pods", &targets, ConfirmLevel::None) else {
-            self.retain_recovery_error();
+            if recovery.is_some() {
+                self.retain_recovery_error();
+            }
             return;
         };
         let label = format!("Start debug container in {ns}/{pod} with image {image}?");
@@ -865,6 +872,7 @@ impl App {
                 pod: pod.clone(),
                 target,
                 image,
+                recovery,
             },
             label,
             level,
@@ -882,6 +890,7 @@ impl App {
         pod: String,
         target: Option<String>,
         image: String,
+        recovery: Option<Box<CommandFailure>>,
     ) {
         let tgt = target
             .as_deref()
@@ -908,7 +917,10 @@ impl App {
             argv.push("--".into());
             argv.extend(self.debug.command.clone());
         }
-        self.pending = Some(Suspend::Shell(argv));
+        self.pending = Some(match recovery {
+            Some(failure) => Suspend::Recovery { argv, failure },
+            None => Suspend::Shell(argv),
+        });
     }
 
     /// `:debug` on a node — preview and confirm the host access a node debug

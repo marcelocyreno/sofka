@@ -7,6 +7,7 @@ pub struct ShellTarget {
     pub container: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct CommandFailure {
     pub message: String,
     original_message: String,
@@ -27,6 +28,7 @@ impl App {
         &mut self,
         target: Option<ShellTarget>,
         result: std::io::Result<()>,
+        recovery: Option<Box<CommandFailure>>,
     ) {
         match result {
             Ok(()) => {
@@ -37,7 +39,7 @@ impl App {
             Err(error) => {
                 let message = crate::ui::strip_ansi_if_present(&error.to_string()).into_owned();
                 let target = target.filter(|_| missing_shell(&message));
-                let (message, original_message, target) = match self.command_failure.take() {
+                let (message, original_message, target) = match recovery {
                     Some(previous) => (
                         format!(
                             "{}\n\nRecovery failed:\n{message}",
@@ -85,7 +87,8 @@ impl App {
             KeyCode::Char('d') => {
                 let target = self.command_failure.as_ref().and_then(|f| f.target.clone());
                 if let Some(target) = target {
-                    self.request_debug_target(target.ns, target.pod, target.container);
+                    let recovery = self.command_failure.clone().map(Box::new);
+                    self.request_debug_target(target.ns, target.pod, target.container, recovery);
                     if self.mode != Mode::Prompt {
                         self.retain_recovery_error();
                     }

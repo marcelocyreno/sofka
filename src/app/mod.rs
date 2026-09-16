@@ -239,6 +239,10 @@ pub enum Mode {
 /// command (exec, edit, port-forward), then resume.
 pub enum Suspend {
     Shell(Vec<String>),
+    Recovery {
+        argv: Vec<String>,
+        failure: Box<CommandFailure>,
+    },
 }
 
 /// A `kubectl port-forward` running in the background (not `Suspend::Shell`
@@ -378,6 +382,7 @@ enum ConfirmAction {
         pod: String,
         target: Option<String>,
         image: String,
+        recovery: Option<Box<CommandFailure>>,
     },
     /// Create a temporary pod that mounts a PVC nothing else mounts, so it can
     /// be browsed or shelled into.
@@ -489,6 +494,7 @@ enum PromptKind {
         ns: String,
         pod: String,
         target: Option<String>,
+        recovery: Option<Box<CommandFailure>>,
     },
     /// File-transfer path prompts (`t` on a pod), asked in two steps: the
     /// source path first (`src` is `None`), then the destination with the
