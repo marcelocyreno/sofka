@@ -260,10 +260,83 @@ async fn helmchart_actions_patch_selected_and_marked_charts() {
 }
 
 #[tokio::test]
+async fn flux_menu_requires_the_resource_api_group() {
+    for (plural, kind, group) in [
+        (
+            "kustomizations",
+            "Kustomization",
+            "kustomize.toolkit.fluxcd.io",
+        ),
+        ("helmreleases", "HelmRelease", "helm.toolkit.fluxcd.io"),
+        (
+            "gitrepositories",
+            "GitRepository",
+            "source.toolkit.fluxcd.io",
+        ),
+        (
+            "helmrepositories",
+            "HelmRepository",
+            "source.toolkit.fluxcd.io",
+        ),
+        ("helmcharts", "HelmChart", "source.toolkit.fluxcd.io"),
+        (
+            "ocirepositories",
+            "OCIRepository",
+            "source.toolkit.fluxcd.io",
+        ),
+        ("buckets", "Bucket", "source.toolkit.fluxcd.io"),
+        (
+            "imagerepositories",
+            "ImageRepository",
+            "image.toolkit.fluxcd.io",
+        ),
+        (
+            "imageupdateautomations",
+            "ImageUpdateAutomation",
+            "image.toolkit.fluxcd.io",
+        ),
+        ("alerts", "Alert", "notification.toolkit.fluxcd.io"),
+        ("receivers", "Receiver", "notification.toolkit.fluxcd.io"),
+    ] {
+        let other_flux_group = if group == "source.toolkit.fluxcd.io" {
+            "helm.toolkit.fluxcd.io"
+        } else {
+            "source.toolkit.fluxcd.io"
+        };
+        for candidate in [group, "example.com", other_flux_group] {
+            let (mut app, _rx) = test_app();
+            app.cluster.register_kind(candidate, kind, plural, true);
+            app.switch_kind(plural);
+            apply(
+                &mut app,
+                json!({
+                    "apiVersion": format!("{candidate}/v1"), "kind": kind,
+                    "metadata": {"name": "apps", "namespace": "default"}
+                }),
+            );
+            app.handle_key(press(KeyCode::Char(' '))).unwrap();
+            app.handle_key(press(KeyCode::Char('t'))).unwrap();
+            assert_eq!(
+                app.mode,
+                if candidate == group {
+                    Mode::FluxMenu
+                } else {
+                    Mode::Table
+                },
+                "{plural}.{candidate}",
+            );
+            assert_eq!(app.marked.len(), 1);
+            if candidate != group {
+                assert!(app.flash.starts_with("suspend/resume only applies to"));
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn force_reconcile_menu_is_limited_to_flux_helmreleases() {
     for (plural, group, kind) in [
         ("helmreleases", "helm.toolkit.fluxcd.io", "HelmRelease"),
-        ("helmreleases", "example.com", "HelmRelease"),
         ("helmcharts", "source.toolkit.fluxcd.io", "HelmChart"),
         (
             "kustomizations",

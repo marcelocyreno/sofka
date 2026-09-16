@@ -92,21 +92,6 @@ const WELCOME_FLASH: &str =
 /// clears it (see [`App::expire_flash`]).
 const FLASH_TTL: std::time::Duration = std::time::Duration::from_secs(8);
 
-/// Flux CD resource kinds that support suspend and resume through `spec.suspend`.
-const FLUX_SUSPENDABLE_KINDS: &[&str] = &[
-    "kustomizations",
-    "helmreleases",
-    "gitrepositories",
-    "helmrepositories",
-    "helmcharts",
-    "ocirepositories",
-    "buckets",
-    "imagerepositories",
-    "imageupdateautomations",
-    "alerts",
-    "receivers",
-];
-
 /// The ArgoCD CRD group. Used to disambiguate the very generic `applications`
 /// and `applicationsets` plurals — only `argoproj.io` kinds get the `t` menu.
 const ARGOCD_GROUP: &str = "argoproj.io";
