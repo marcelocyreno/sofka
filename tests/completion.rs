@@ -278,7 +278,7 @@ fn plugin_candidates_use_cached_catalog_and_managed_installations() {
     std::fs::create_dir_all(cache.join("managed")).unwrap();
     std::fs::create_dir_all(cache.join("manual")).unwrap();
     std::fs::write(cache.join("managed/.sofka-install.json"), "{}").unwrap();
-    let catalog = json!({
+    let mut catalog = json!({
         "schema_version": 1, "commit": "0".repeat(40), "fetched_at": 0,
         "catalog": {"schema_version": 1, "generated_at": "2026-09-17T00:00:00Z", "plugins": [{
             "id": "resource-summary", "display_name": "Resource summary", "description": "Show resources",
@@ -290,6 +290,36 @@ fn plugin_candidates_use_cached_catalog_and_managed_installations() {
                     "blake3": "0".repeat(64), "size": 10}]}]
         }]}
     });
+    let base = catalog["catalog"]["plugins"][0]["versions"][0].clone();
+    let mut withdrawn = base.clone();
+    withdrawn["version"] = json!("0.2.0");
+    withdrawn["status"] = json!("withdrawn");
+    withdrawn["withdrawal_reason"] = json!("Test withdrawal");
+    let mut incompatible = base.clone();
+    incompatible["version"] = json!("0.3.0");
+    incompatible["sofka"] = json!(">=99.0.0");
+    let mut wrong_platform = base.clone();
+    wrong_platform["version"] = json!("0.4.0");
+    wrong_platform["artifacts"][0]["platform"] = json!(
+        if sofka::plugin_catalog::platform().unwrap() == "x86_64-unknown-linux-gnu" {
+            "aarch64-apple-darwin"
+        } else {
+            "x86_64-unknown-linux-gnu"
+        }
+    );
+    let mut prerelease = base;
+    prerelease["version"] = json!("0.5.0-beta.1");
+    catalog["catalog"]["plugins"][0]["versions"]
+        .as_array_mut()
+        .unwrap()
+        .extend([withdrawn.clone(), incompatible, wrong_platform, prerelease]);
+    let mut unavailable = catalog["catalog"]["plugins"][0].clone();
+    unavailable["id"] = json!("resource-withdrawn");
+    unavailable["versions"] = json!([withdrawn]);
+    catalog["catalog"]["plugins"]
+        .as_array_mut()
+        .unwrap()
+        .push(unavailable);
     std::fs::write(cache.join("catalog-cache.json"), catalog.to_string()).unwrap();
     let missing = f.0.join("missing");
     for command in ["describe", "install"] {
@@ -299,7 +329,11 @@ fn plugin_candidates_use_cached_catalog_and_managed_installations() {
                 missing.as_os_str(),
                 &["sofka", "plugin", command, "res"]
             ),
-            ["resource-summary"]
+            if command == "install" {
+                vec!["resource-summary"]
+            } else {
+                vec!["resource-summary", "resource-withdrawn"]
+            }
         );
         assert_eq!(
             f.complete(
@@ -307,7 +341,17 @@ fn plugin_candidates_use_cached_catalog_and_managed_installations() {
                 missing.as_os_str(),
                 &["sofka", "plugin", command, "resource-summary@"]
             ),
-            ["resource-summary@0.1.0"]
+            if command == "install" {
+                vec!["resource-summary@0.1.0", "resource-summary@0.5.0-beta.1"]
+            } else {
+                vec![
+                    "resource-summary@0.1.0",
+                    "resource-summary@0.2.0",
+                    "resource-summary@0.3.0",
+                    "resource-summary@0.4.0",
+                    "resource-summary@0.5.0-beta.1",
+                ]
+            }
         );
     }
     for command in ["update", "remove"] {

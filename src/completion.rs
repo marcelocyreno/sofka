@@ -9,6 +9,9 @@ use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
 use clap_complete::env::{CompleteEnv, Shells};
 use sofka::{k8s, plugin_catalog, plugin_install};
 
+#[cfg(windows)]
+mod windows;
+
 const ENV: &str = "SOFKA_COMPLETE";
 const WORKER: &str = "SOFKA_COMPLETE_WORKER";
 const TIMEOUT: Duration = Duration::from_secs(2);
@@ -26,6 +29,10 @@ pub fn try_complete() -> bool {
     };
     let mut args: Vec<OsString> = std::env::args_os().collect();
     if std::env::var_os(WORKER).is_some() {
+        #[cfg(windows)]
+        if !windows::wait_for_parent() {
+            return true;
+        }
         let offset = args
             .iter()
             .position(|a| a == "--")
@@ -73,7 +80,11 @@ pub fn try_complete() -> bool {
                 .stderr(Stdio::null())
                 .kill_on_drop(true);
             child.stdout(Stdio::piped());
+            #[cfg(windows)]
+            child.stdin(Stdio::piped());
             let child = child.spawn().ok()?;
+            #[cfg(windows)]
+            let (_job, child) = windows::start_worker(child).await.ok()?;
             #[cfg(unix)]
             let pid = child.id();
             let result = tokio::time::timeout(TIMEOUT, child.wait_with_output()).await;
@@ -312,16 +323,19 @@ fn plugin_values(command: &str, current: &OsStr) -> Vec<String> {
     }
     let mut values = Vec::new();
     if let Some(snapshot) = plugin_catalog::cached() {
-        for plugin in snapshot.catalog.plugins {
+        for plugin in &snapshot.catalog.plugins {
             if current.to_string_lossy().contains('@') {
                 values.extend(
                     plugin
                         .versions
                         .iter()
-                        .map(|v| format!("{}@{}", plugin.id, v.version)),
+                        .map(|v| format!("{}@{}", plugin.id, v.version))
+                        .filter(|request| {
+                            command != "install" || snapshot.catalog.select(request).is_ok()
+                        }),
                 );
-            } else {
-                values.push(plugin.id);
+            } else if command != "install" || snapshot.catalog.select(&plugin.id).is_ok() {
+                values.push(plugin.id.clone());
             }
         }
     }

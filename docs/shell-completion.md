@@ -17,7 +17,10 @@ CLI definitions. They also complete these values when you press Tab:
 - `--kubeconfig` and `--validate-plugin-report`: local paths.
 - `--validate-plugin`: local directories.
 - `plugin describe` and `plugin install`: plugin IDs and `ID@VERSION` values from
-  the cached catalog. Run `sofka plugin search` to populate or refresh that cache.
+  the cached catalog. Install suggestions exclude withdrawn releases and releases
+  that do not support the current sofka version or platform. Describe suggestions
+  include all cached versions. Run `sofka plugin search` to populate or refresh
+  that cache.
 - `plugin update` and `plugin remove`: installed, managed plugin IDs.
 
 Plugin completion does not download or install packages. Free text, such as a

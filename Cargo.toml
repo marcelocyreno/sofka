@@ -76,6 +76,9 @@ unicode-segmentation = "1.13.3"
 unicode-width = "0.2.2"
 x509-parser = { version = "0.18", default-features = false }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.189"
 
