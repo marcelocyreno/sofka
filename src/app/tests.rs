@@ -17252,6 +17252,31 @@ async fn provider_lookback_prompt_changes_period_and_requeries() {
 }
 
 #[tokio::test]
+async fn kubelet_lookback_prompt_shows_validated_config() {
+    for (configured, current, since) in [
+        (None, "tail", None),
+        (Some("bogus"), "tail", None),
+        (Some("0s"), "tail", None),
+        (Some("9223372036854775807d"), "tail", None),
+        (Some("4h"), "4h", Some(14_400)),
+    ] {
+        let (mut app, _rx) = test_app();
+        app.mode = Mode::Logs;
+        app.return_mode = Mode::Table;
+        app.logs_cfg.since = configured.map(str::to_owned);
+
+        app.handle_key(press(KeyCode::Char('T'))).unwrap();
+
+        assert_eq!(app.mode, Mode::Prompt);
+        assert_eq!(
+            app.prompt_label,
+            format!("lookback: s/m/h/d or tail (current: {current})")
+        );
+        assert_eq!(app.log_tail_and_since().1, since);
+    }
+}
+
+#[tokio::test]
 async fn kubelet_lookback_prompt_cancel_and_invalid_input_keep_stream() {
     let (mut app, _rx) = test_app();
     app.switch_kind("pods");

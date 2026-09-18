@@ -1321,7 +1321,11 @@ impl App {
                     )
                 } else {
                     let current = self.logs.anchor_label().unwrap_or_else(|| {
-                        self.logs_cfg.since.clone().unwrap_or_else(|| "tail".into())
+                        self.logs_cfg
+                            .since
+                            .clone()
+                            .filter(|_| self.log_tail_and_since().1.is_some())
+                            .unwrap_or_else(|| "tail".into())
                     });
                     format!("lookback: s/m/h/d or tail (current: {current})")
                 };
