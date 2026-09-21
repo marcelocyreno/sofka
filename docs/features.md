@@ -148,6 +148,8 @@ concurrent drains, and full kubectl drain parity are outside this feature.
   selection applies to the next namespaced resource view. Filters follow the
   namespace switcher's rules, and resource ownership scope is cleared.
   Without an argument, `:ns` opens the Namespaces list.
+  Enter on a namespace opens its Pods list. Esc returns to the Namespaces list
+  and restores its filter and selected row.
 - **Live watch** of any kind through `kube::runtime::watcher`, streamed into an
   in-memory store. Watch requests use uncompressed responses to avoid gzip
   stream errors. List requests retain gzip compression.

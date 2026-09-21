@@ -24,7 +24,7 @@ impl App {
         // how `compile` knows to warn about a `drill` configured on one of
         // them. Add a kind here, add it there.
         match self.kind_plural.as_str() {
-            "namespaces" => self.set_namespace_and_return(&name),
+            "namespaces" => self.drill_into_namespace(&name),
             "nodes" => self.drill_to_pods(
                 String::new(),
                 None,
@@ -396,6 +396,23 @@ impl App {
         self.table_state.select(Some(0));
         self.mode = Mode::Table;
         self.start_watch();
+    }
+
+    fn drill_into_namespace(&mut self, name: &str) {
+        let Some(pods) = self.cluster.resolve("pods") else {
+            self.flash_warn("pods kind unavailable");
+            return;
+        };
+        self.push_frame();
+        self.kind = Some(pods);
+        self.kind_plural = "pods".into();
+        self.labels = None;
+        self.fields = None;
+        self.owner = None;
+        self.scope_label = None;
+        self.filter.clear();
+        self.reset_sort();
+        self.set_namespace(name.to_string());
     }
 
     pub(super) fn set_namespace_and_return(&mut self, name: &str) {

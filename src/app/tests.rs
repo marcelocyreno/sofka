@@ -11420,6 +11420,46 @@ async fn ns_command_without_argument_opens_namespaces() {
 }
 
 #[tokio::test]
+async fn namespace_enter_then_escape_restores_the_namespace_list() {
+    for filter in ["", "team"] {
+        let (mut app, _rx) = test_app();
+        app.cluster
+            .add_aliases(&HashMap::from([("ns".into(), "namespaces".into())]));
+        palette(&mut app, "ns");
+        let original_namespace = app.namespace.clone();
+        for name in ["team-a", "team-b"] {
+            apply(
+                &mut app,
+                json!({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name}}),
+            );
+        }
+        if !filter.is_empty() {
+            app.handle_key(press(KeyCode::Char('/'))).unwrap();
+            for c in filter.chars() {
+                app.handle_key(press(KeyCode::Char(c))).unwrap();
+            }
+            app.handle_key(press(KeyCode::Enter)).unwrap();
+        }
+        app.handle_key(press(KeyCode::Down)).unwrap();
+        assert_eq!(
+            app.selected().unwrap().metadata.name.as_deref(),
+            Some("team-b")
+        );
+        app.handle_key(press(KeyCode::Enter)).unwrap();
+        assert_eq!(app.kind_plural, "pods");
+        assert_eq!(app.namespace, "team-b");
+        assert!(app.filter.is_empty());
+
+        app.handle_key(press(KeyCode::Esc)).unwrap();
+        assert_eq!(app.kind_plural, "namespaces");
+        assert_eq!(app.namespace, original_namespace);
+        assert_eq!(app.filter, filter);
+        assert_eq!(app.table_state.selected(), Some(1));
+        assert!(app.stack.is_empty());
+    }
+}
+
+#[tokio::test]
 async fn ns_command_matches_picker_for_filters_and_owner_scope() {
     for return_from_list in [false, true] {
         for name in ["social", "all", "*"] {
