@@ -1129,7 +1129,7 @@ async fn context_picker_pages_by_the_drawn_list_height() {
 
     let mut term = Terminal::new(TestBackend::new(80, 24)).unwrap();
     term.draw(|f| crate::ui::draw(f, &mut app)).unwrap();
-    let page = app.picker_page_rows;
+    let page = app.picker_page_items;
     assert!((2..40).contains(&page), "page follows the popup: {page}");
 
     app.handle_key(press(KeyCode::PageDown)).unwrap();
@@ -1159,7 +1159,7 @@ async fn context_picker_pages_by_the_drawn_list_height() {
 async fn every_picker_pages_with_pageup_and_pagedown() {
     fn page_through(app: &mut App, selected: fn(&App) -> Option<usize>) {
         let mode = app.mode;
-        app.picker_page_rows = 2;
+        app.picker_page_items = 2;
         app.handle_key(press(KeyCode::PageDown)).unwrap();
         assert_eq!(selected(app), Some(2), "{mode:?} page down");
         for _ in 0..20 {
@@ -1211,7 +1211,7 @@ async fn every_picker_pages_with_pageup_and_pagedown() {
 
     app.transfer_menu_state.select(Some(0));
     app.mode = Mode::TransferMenu;
-    app.picker_page_rows = 10;
+    app.picker_page_items = 10;
     app.handle_key(press(KeyCode::PageDown)).unwrap();
     assert_eq!(
         app.transfer_menu_state.selected(),

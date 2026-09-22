@@ -9,11 +9,14 @@ impl App {
             (Some(Action::Down), _) => list_step(&mut self.container_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.container_state, len, false),
             (Some(Action::PageDown), _) => {
-                list_page(&mut self.container_state, len, self.picker_page_rows, true)
+                list_page(&mut self.container_state, len, self.picker_page_items, true)
             }
-            (Some(Action::PageUp), _) => {
-                list_page(&mut self.container_state, len, self.picker_page_rows, false)
-            }
+            (Some(Action::PageUp), _) => list_page(
+                &mut self.container_state,
+                len,
+                self.picker_page_items,
+                false,
+            ),
             (Some(Action::Logs), _) => {
                 if let Some(i) = self.container_state.selected()
                     && let Some(c) = self.container_list.get(i).cloned()
@@ -457,11 +460,14 @@ impl App {
             (Some(Action::Down), _) => list_step(&mut self.pf_picker_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.pf_picker_state, len, false),
             (Some(Action::PageDown), _) => {
-                list_page(&mut self.pf_picker_state, len, self.picker_page_rows, true)
+                list_page(&mut self.pf_picker_state, len, self.picker_page_items, true)
             }
-            (Some(Action::PageUp), _) => {
-                list_page(&mut self.pf_picker_state, len, self.picker_page_rows, false)
-            }
+            (Some(Action::PageUp), _) => list_page(
+                &mut self.pf_picker_state,
+                len,
+                self.picker_page_items,
+                false,
+            ),
             (Some(Action::Accept | Action::Edit), _) => {
                 let Some(i) = self.pf_picker_state.selected() else {
                     return;

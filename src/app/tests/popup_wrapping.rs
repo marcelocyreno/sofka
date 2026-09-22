@@ -237,3 +237,34 @@ async fn long_picker_title_keeps_selected_choices_visible() {
     app.handle_key(press(KeyCode::Esc)).unwrap();
     assert_eq!(app.mode, Mode::Table);
 }
+
+#[tokio::test]
+async fn context_popup_pages_by_wrapped_items_on_screen() {
+    let (mut app, _rx) = test_app();
+    app.mode = Mode::Contexts;
+    let names = (0..30)
+        .map(|i| format!("region-{i:02}-{}-tail", "abcdefghij".repeat(5)))
+        .collect::<Vec<_>>();
+    app.handle_msg(Msg::Contexts {
+        generation: app.generation,
+        list: names.clone(),
+    });
+    app.ctx_state.select(Some(0));
+
+    let text = compact(&popup_text(&mut app, 80, 24, "Contexts"));
+    let page = app.picker_page_items;
+    assert!(page >= 1);
+    assert!(
+        names[..page].iter().all(|n| text.contains(&compact(n))),
+        "a page only spans items that were on screen: {page}"
+    );
+    assert!(
+        !text.contains(&compact(&names[page + 1])),
+        "wrapped rows are not counted as items: {page}"
+    );
+
+    app.handle_key(press(KeyCode::PageDown)).unwrap();
+    assert_eq!(app.ctx_state.selected(), Some(page));
+    app.handle_key(press(KeyCode::PageUp)).unwrap();
+    assert_eq!(app.ctx_state.selected(), Some(0));
+}

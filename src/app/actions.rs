@@ -625,11 +625,14 @@ impl App {
             (Some(Action::Down), _) => list_step(&mut self.container_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.container_state, len, false),
             (Some(Action::PageDown), _) => {
-                list_page(&mut self.container_state, len, self.picker_page_rows, true)
+                list_page(&mut self.container_state, len, self.picker_page_items, true)
             }
-            (Some(Action::PageUp), _) => {
-                list_page(&mut self.container_state, len, self.picker_page_rows, false)
-            }
+            (Some(Action::PageUp), _) => list_page(
+                &mut self.container_state,
+                len,
+                self.picker_page_items,
+                false,
+            ),
             (Some(Action::Accept), _) => {
                 if let Some(i) = self.container_state.selected()
                     && let Some(container) = self.container_list.get(i).cloned()
@@ -1342,10 +1345,10 @@ impl App {
             (Some(Action::Down), _) => list_step(&mut self.skin_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.skin_state, len, false),
             (Some(Action::PageDown), _) => {
-                list_page(&mut self.skin_state, len, self.picker_page_rows, true)
+                list_page(&mut self.skin_state, len, self.picker_page_items, true)
             }
             (Some(Action::PageUp), _) => {
-                list_page(&mut self.skin_state, len, self.picker_page_rows, false)
+                list_page(&mut self.skin_state, len, self.picker_page_items, false)
             }
             (Some(Action::Accept), _) => {
                 if let Some(name) = self
@@ -1666,13 +1669,13 @@ impl App {
             (Some(Action::PageDown), _) => list_page(
                 &mut self.transfer_menu_state,
                 len,
-                self.picker_page_rows,
+                self.picker_page_items,
                 true,
             ),
             (Some(Action::PageUp), _) => list_page(
                 &mut self.transfer_menu_state,
                 len,
-                self.picker_page_rows,
+                self.picker_page_items,
                 false,
             ),
             (Some(Action::Accept), _) => {
@@ -1910,11 +1913,14 @@ impl App {
             (Some(Action::Down), _) => list_step(&mut self.flux_menu_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.flux_menu_state, len, false),
             (Some(Action::PageDown), _) => {
-                list_page(&mut self.flux_menu_state, len, self.picker_page_rows, true)
+                list_page(&mut self.flux_menu_state, len, self.picker_page_items, true)
             }
-            (Some(Action::PageUp), _) => {
-                list_page(&mut self.flux_menu_state, len, self.picker_page_rows, false)
-            }
+            (Some(Action::PageUp), _) => list_page(
+                &mut self.flux_menu_state,
+                len,
+                self.picker_page_items,
+                false,
+            ),
             (Some(Action::Accept), _) => {
                 let choice = self
                     .flux_menu_state

@@ -1824,7 +1824,7 @@ pub struct App {
     pub mode: Mode,
     pub table_state: TableState,
     pub table_page_rows: usize,
-    pub picker_page_rows: usize,
+    pub picker_page_items: usize,
     /// Row keys (`ns/name`) marked for bulk actions via SPACE. Cleared whenever
     /// the view is (re)watched. Bulk actions target this set if non-empty, else
     /// the current selection.
@@ -2334,7 +2334,7 @@ impl App {
             mode: Mode::Table,
             table_state: TableState::default(),
             table_page_rows: 10,
-            picker_page_rows: 10,
+            picker_page_items: 10,
             marked: HashSet::new(),
             range_selection: None,
             sort_column: None,
