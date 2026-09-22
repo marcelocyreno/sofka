@@ -8,6 +8,12 @@ impl App {
             (Some(Action::Back), _) | (Some(Action::Close), _) => self.mode = Mode::Table,
             (Some(Action::Down), _) => list_step(&mut self.container_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.container_state, len, false),
+            (Some(Action::PageDown), _) => {
+                list_page(&mut self.container_state, len, self.picker_page_rows, true)
+            }
+            (Some(Action::PageUp), _) => {
+                list_page(&mut self.container_state, len, self.picker_page_rows, false)
+            }
             (Some(Action::Logs), _) => {
                 if let Some(i) = self.container_state.selected()
                     && let Some(c) = self.container_list.get(i).cloned()
@@ -450,6 +456,12 @@ impl App {
             (Some(Action::Back), _) | (Some(Action::Close), _) => self.mode = Mode::Table,
             (Some(Action::Down), _) => list_step(&mut self.pf_picker_state, len, true),
             (Some(Action::Up), _) => list_step(&mut self.pf_picker_state, len, false),
+            (Some(Action::PageDown), _) => {
+                list_page(&mut self.pf_picker_state, len, self.picker_page_rows, true)
+            }
+            (Some(Action::PageUp), _) => {
+                list_page(&mut self.pf_picker_state, len, self.picker_page_rows, false)
+            }
             (Some(Action::Accept | Action::Edit), _) => {
                 let Some(i) = self.pf_picker_state.selected() else {
                     return;

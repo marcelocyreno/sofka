@@ -1118,6 +1118,116 @@ async fn ctrl_f_and_ctrl_b_page_document_views() {
 }
 
 #[tokio::test]
+async fn context_picker_pages_by_the_drawn_list_height() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    let (mut app, _rx) = test_app();
+    app.ctx_list = (0..40).map(|i| format!("ctx-{i:02}")).collect();
+    app.ctx_state.select(Some(0));
+    app.mode = Mode::Contexts;
+
+    let mut term = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    term.draw(|f| crate::ui::draw(f, &mut app)).unwrap();
+    let page = app.picker_page_rows;
+    assert!((2..40).contains(&page), "page follows the popup: {page}");
+
+    app.handle_key(press(KeyCode::PageDown)).unwrap();
+    assert_eq!(app.ctx_state.selected(), Some(page));
+    app.handle_key(press(KeyCode::PageUp)).unwrap();
+    assert_eq!(app.ctx_state.selected(), Some(0));
+    for _ in 0..10 {
+        app.handle_key(press(KeyCode::PageDown)).unwrap();
+    }
+    assert_eq!(app.ctx_state.selected(), Some(39), "clamps at the end");
+
+    // Paging also works while typing a filter.
+    app.handle_key(press(KeyCode::Char('/'))).unwrap();
+    for c in "ctx-".chars() {
+        app.handle_key(press(KeyCode::Char(c))).unwrap();
+    }
+    assert!(app.ctx_filtering);
+    assert_eq!(app.ctx_state.selected(), Some(0));
+    app.handle_key(press(KeyCode::PageDown)).unwrap();
+    assert_eq!(app.ctx_state.selected(), Some(page));
+    app.handle_key(press(KeyCode::PageUp)).unwrap();
+    assert_eq!(app.ctx_state.selected(), Some(0));
+    assert_eq!(app.ctx_filter, "ctx-", "page keys do not edit the filter");
+}
+
+#[tokio::test]
+async fn every_picker_pages_with_pageup_and_pagedown() {
+    fn page_through(app: &mut App, selected: fn(&App) -> Option<usize>) {
+        let mode = app.mode;
+        app.picker_page_rows = 2;
+        app.handle_key(press(KeyCode::PageDown)).unwrap();
+        assert_eq!(selected(app), Some(2), "{mode:?} page down");
+        for _ in 0..20 {
+            app.handle_key(press(KeyCode::PageDown)).unwrap();
+        }
+        let last = selected(app).unwrap();
+        assert!(last > 2, "{mode:?} reaches the end");
+        app.handle_key(press(KeyCode::PageUp)).unwrap();
+        assert_eq!(selected(app), Some(last - 2), "{mode:?} page up");
+        for _ in 0..20 {
+            app.handle_key(press(KeyCode::PageUp)).unwrap();
+        }
+        assert_eq!(selected(app), Some(0), "{mode:?} clamps at the top");
+        assert_eq!(app.mode, mode, "{mode:?} stays open");
+    }
+    let names: Vec<String> = (0..8).map(|i| format!("item-{i}")).collect();
+
+    let (mut app, _rx) = test_app();
+    app.ns_list = names.clone();
+    app.ns_filter.clear();
+    app.ns_state.select(Some(0));
+    app.mode = Mode::Namespaces;
+    page_through(&mut app, |a| a.ns_state.selected());
+
+    app.skin_list = names.clone();
+    app.skin_state.select(Some(0));
+    app.mode = Mode::Skins;
+    page_through(&mut app, |a| a.skin_state.selected());
+
+    app.snapshot_list = names
+        .iter()
+        .map(|n| (std::path::PathBuf::from(n), n.clone()))
+        .collect();
+    app.snapshot_state.select(Some(0));
+    app.mode = Mode::Snapshots;
+    page_through(&mut app, |a| a.snapshot_state.selected());
+
+    app.pf_picker_items = names.clone();
+    app.pf_picker_state.select(Some(0));
+    app.mode = Mode::PortForwardPicker;
+    page_through(&mut app, |a| a.pf_picker_state.selected());
+
+    app.container_list = names.clone();
+    for mode in [Mode::Containers, Mode::SetImage] {
+        app.container_state.select(Some(0));
+        app.mode = mode;
+        page_through(&mut app, |a| a.container_state.selected());
+    }
+
+    app.transfer_menu_state.select(Some(0));
+    app.mode = Mode::TransferMenu;
+    app.picker_page_rows = 10;
+    app.handle_key(press(KeyCode::PageDown)).unwrap();
+    assert_eq!(
+        app.transfer_menu_state.selected(),
+        Some(TRANSFER_MENU_ITEMS.len() - 1)
+    );
+    app.handle_key(press(KeyCode::PageUp)).unwrap();
+    assert_eq!(app.transfer_menu_state.selected(), Some(0));
+
+    app.mode = Mode::Table;
+    app.switch_kind("pods");
+    app.handle_key(press(KeyCode::Char('S'))).unwrap();
+    assert_eq!(app.mode, Mode::SortPicker);
+    page_through(&mut app, |a| a.sort_picker_state.selected());
+}
+
+#[tokio::test]
 async fn document_scroll_keeps_the_last_page_filled() {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;

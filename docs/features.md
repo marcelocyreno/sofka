@@ -235,6 +235,9 @@ concurrent drains, and full kubectl drain parity are outside this feature.
   `G` / `End` go to the bottom. `/` filters the bindings and resets the scroll
   position. `esc` clears the filter first, then closes help. `q` or `?` closes
   help and returns to the previous screen.
+- **Picker paging** - `PgDn` and `PgUp` move one visible page through every
+  list picker, including `:ctx` and `:ns`, and keep working while a picker
+  filter is being typed.
 - **Filtering** (`/`) with matched-character highlighting: fuzzy text, `"text"`
   contiguous match, `/re/` regular expression (both case-insensitive), `!text`
   inverse match (also `!"text"` and `!/re/`), local label key and value search

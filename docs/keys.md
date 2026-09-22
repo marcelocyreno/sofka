@@ -128,6 +128,7 @@ See [Node drain options](features.md#node-drain-options) for defaults and limits
 | `enter`              | start the selected mapping, or open manual input for "Custom…" |
 | `e`                  | edit only the local port of a declared mapping                 |
 | `j` / `k`, `↓` / `↑` | select a mapping                                               |
+| `PgDn` / `PgUp`      | move one page down / up                                        |
 | `esc` / `q`          | close the picker                                               |
 
 The local-port prompt contains the current value. `enter` starts the forward;
@@ -260,6 +261,13 @@ opens the object in its own view - name-filtered, so every action there applies
 to it - `y` shows its YAML, `d` describes it, `r` gathers again, `esc` goes back.
 Not offered on namespaces (`enter` re-scopes to one) or Helm rows.
 See [Views](views.md#navigating-between-kinds) for adding CRD relations.
+
+## Pickers
+
+`PgDn` and `PgUp` move one page through every list picker: contexts,
+namespaces, sort and copy fields, port forwards, containers, set image, skins,
+snapshots, and the action and transfer menus. The page size is the number of
+visible list rows. Paging also works while a picker filter is being typed.
 
 ## Text inputs (palette, filters, prompts)
 

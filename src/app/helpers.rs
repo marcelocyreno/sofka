@@ -501,6 +501,20 @@ pub(super) fn list_step(state: &mut ListState, len: usize, down: bool) {
     state.select(Some(next));
 }
 
+pub(super) fn list_page(state: &mut ListState, len: usize, rows: usize, down: bool) {
+    if len == 0 {
+        return;
+    }
+    let i = state.selected().unwrap_or(0);
+    let page = rows.max(1);
+    let next = if down {
+        i.saturating_add(page).min(len - 1)
+    } else {
+        i.saturating_sub(page)
+    };
+    state.select(Some(next));
+}
+
 /// Copy text to the system clipboard via the first available OS tool, falling
 /// back to OSC 52 for remote terminals where local clipboard tools are absent.
 pub(super) fn copy_to_clipboard(text: &str) -> bool {
