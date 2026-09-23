@@ -340,11 +340,10 @@ impl App {
                 for (scope, action, chords) in self.keymap.entries() {
                     if scope == "table"
                         && action != Action::Faults
-                        && (action != Action::Inspect
-                            || resources.is_empty()
-                            || resources.iter().any(|s| {
-                                matches!(s.as_str(), "secrets" | "persistentvolumeclaims")
-                            }))
+                        && action.kinds().is_none_or(|kinds| {
+                            resources.is_empty()
+                                || resources.iter().any(|s| kinds.contains(&s.as_str()))
+                        })
                         && chords
                             .iter()
                             .any(|other| crate::keymap::overlaps(&chord, other))
@@ -372,6 +371,18 @@ impl App {
             if let Some(namespace) = self.favorite_namespace(index) {
                 self.set_namespace(namespace);
             }
+            return;
+        }
+        // A kind-specific built-in leaves its key to user bindings on other
+        // kinds; with none bound it still runs and says where it applies.
+        if key
+            .action
+            .and_then(Action::kinds)
+            .is_some_and(|kinds| !kinds.contains(&self.kind_plural.as_str()))
+            && (self.try_bookmark_key(key.event())
+                || self.try_workspace_key(key.event())
+                || self.try_plugin_key(key.event()))
+        {
             return;
         }
         match (key.action, key.code) {

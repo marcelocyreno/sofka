@@ -30350,6 +30350,58 @@ async fn key_warnings_report_hidden_bindings_without_blocking_released_keys() {
 }
 
 #[tokio::test]
+async fn kind_specific_keys_fall_through_to_plugins_on_other_kinds() {
+    let (mut app, _rx) = app_with_pod();
+    assert_eq!(app.kind_plural, "pods");
+    app.plugins = vec![crate::config::Plugin {
+        name: "pod-cmd".into(),
+        key: "shift-c".into(),
+        command: "true".into(),
+        scopes: vec!["pods".into(), "nodes".into()],
+        mutating: Some(false),
+        ..Default::default()
+    }];
+    let shift_c = KeyEvent::new(KeyCode::Char('C'), KeyModifiers::SHIFT);
+    app.handle_key(shift_c).unwrap();
+    assert!(matches!(app.pending, Some(Suspend::Shell(_))));
+    assert!(!app.flash.contains("applies to nodes"), "{}", app.flash);
+
+    app.pending = None;
+    app.switch_kind("nodes");
+    app.handle_key(shift_c).unwrap();
+    assert!(app.pending.is_none(), "cordon keeps its key on nodes");
+
+    app.switch_kind("services");
+    app.handle_key(shift_c).unwrap();
+    assert!(app.pending.is_none());
+    assert!(
+        app.flash.contains("cordon/uncordon applies to nodes"),
+        "{}",
+        app.flash
+    );
+}
+
+#[tokio::test]
+async fn kind_specific_key_warnings_follow_plugin_scopes() {
+    let (mut app, _rx) = test_app();
+    let cordon_warnings = |app: &mut App, scopes: &[&str]| {
+        app.plugins = vec![crate::config::Plugin {
+            name: "c".into(),
+            key: "shift-c".into(),
+            scopes: scopes.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }];
+        app.configure_keys(&Default::default())
+            .into_iter()
+            .filter(|w| w.contains("keys.table.cordon"))
+            .count()
+    };
+    assert_eq!(cordon_warnings(&mut app, &["pods"]), 0);
+    assert_eq!(cordon_warnings(&mut app, &["pods", "nodes"]), 1);
+    assert_eq!(cordon_warnings(&mut app, &[]), 1);
+}
+
+#[tokio::test]
 async fn startup_flashes_hidden_plugin_key_warning() {
     let (mut app, _rx) = test_app();
     app.switch_kind("pods");

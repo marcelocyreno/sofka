@@ -145,6 +145,25 @@ impl Action {
         }
     }
 
+    /// The table kinds a kind-specific action applies to. On any other kind
+    /// its key goes to bookmarks, workspaces, and plugins first.
+    pub fn kinds(self) -> Option<&'static [&'static str]> {
+        match self {
+            Self::Faults | Self::Attach | Self::PreviousLogs => Some(&["pods"]),
+            Self::Inspect => Some(&["secrets", "persistentvolumeclaims"]),
+            Self::Cordon | Self::Uncordon | Self::Drain => Some(&["nodes"]),
+            Self::SetImage => Some(&[
+                "pods",
+                "deployments",
+                "statefulsets",
+                "daemonsets",
+                "replicasets",
+                "replicationcontrollers",
+            ]),
+            _ => None,
+        }
+    }
+
     pub const FAVORITE_NAMESPACES: [Self; 9] = [
         Self::FavoriteNamespace1,
         Self::FavoriteNamespace2,

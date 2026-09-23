@@ -91,9 +91,12 @@ prevent a file from loading. `:config` shows the source paths and key errors.
 
 Built-in bindings keep their current priority over bookmarks, workspaces, and
 plugins. A released key becomes available to them. `:config` reports keys hidden
-by a built-in action when that action is available. The existing exception stays:
-bookmarks, workspaces, and matching plugins take priority over the table's
-`faults` action.
+by a built-in action when that action is available. Kind-specific table actions
+only claim their key on the kinds they act on: `cordon`, `uncordon`, and `drain`
+on nodes, `attach` and `previous_logs` on pods, `set_image` on pods and workload
+controllers, and `inspect` on secrets and PVCs. On other kinds, bookmarks,
+workspaces, and matching plugins get the key first. Bookmarks, workspaces, and
+matching plugins also take priority over the table's `faults` action.
 
 The default confirmation dialog cancels on any unhandled key. Configuring
 `[keys.confirm].back` replaces this fallback with the explicit bindings.

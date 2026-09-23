@@ -562,15 +562,10 @@ impl App {
             return;
         }
         let is_pod = self.kind_plural == "pods";
-        let workload = matches!(
-            self.kind_plural.as_str(),
-            "deployments"
-                | "statefulsets"
-                | "daemonsets"
-                | "replicasets"
-                | "replicationcontrollers"
-        );
-        if !is_pod && !workload {
+        if !Action::SetImage
+            .kinds()
+            .is_some_and(|kinds| kinds.contains(&self.kind_plural.as_str()))
+        {
             self.flash_warn("set image applies to pods and workload controllers");
             return;
         }
